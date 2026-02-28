@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+from sqlalchemy import create_engine
+import streamlit as st
+
+engine = create_engine(st.secrets["DATABASE_URL"])
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 st.title("Painel de desvios - Ração Sidrolândia")
@@ -13,6 +17,41 @@ st.sidebar.header("Upload das Planilhas")
 arquivo_prog = st.sidebar.file_uploader("Programacao.xlsx", type=["xlsx"])
 arquivo_prod = st.sidebar.file_uploader("Producao.xlsx", type=["xlsx"])
 arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
+
+df_prog_db = df_prog[["Data Pedido", "Quantidade Pedido"]].copy()
+df_prog_db.columns = ["data_pedido", "quantidade_pedido"]
+
+engine.execute("delete from programacao")
+df_prog_db.to_sql("programacao", engine, if_exists="append", index=False)
+
+df_prod_db = df_prod[["Data", "Inicial", "Final", "Quantidade"]].copy()
+df_prod_db.columns = ["data", "inicial", "final", "quantidade"]
+
+engine.execute("delete from producao")
+df_prod_db.to_sql("producao", engine, if_exists="append", index=False)
+
+df_ent_db = df_ent[[
+    "Data Transação",
+    "Placa Veículo",
+    "Cód.Viagem Tpt.",
+    "Total (Kg)"
+]].copy()
+
+df_ent_db.columns = [
+    "data_transacao",
+    "placa_veiculo",
+    "cod_viagem",
+    "total_kg"
+]
+
+engine.execute("delete from entregas")
+df_ent_db.to_sql("entregas", engine, if_exists="append", index=False)
+
+df_prog = pd.read_sql("select * from programacao", engine)
+df_prod = pd.read_sql("select * from producao", engine)
+df_ent = pd.read_sql("select * from entregas", engine)
+
+
 
 if not arquivo_prog or not arquivo_prod or not arquivo_ent:
     st.warning("Envie as 3 planilhas.")
@@ -223,4 +262,5 @@ st.dataframe(
 st.divider()
 
 st.subheader("Caminhões")
+
 st.dataframe(resumo_transporte, use_container_width=True)
