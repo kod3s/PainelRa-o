@@ -107,7 +107,6 @@ VEICULOS = {
     "QIZ3429": {"viagens": 4, "capacidade": 30},
     "RYL1D14": {"viagens": 5, "capacidade": 16.5},
     "EJV6A02": {"viagens": 4, "capacidade": 30},
-    "SMF2D38": {"viagens": 5, "capacidade": 16.5},
 }
 
 df_ent["Placa Veículo"] = df_ent["Placa Veículo"].astype(str).str.strip()
@@ -182,4 +181,5 @@ st.dataframe(
 st.divider()
 st.subheader("Caminhões")
 st.dataframe(resumo_transporte, use_container_width=True)
+
 
