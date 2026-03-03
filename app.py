@@ -78,13 +78,14 @@ ent_total = df_ent["Total (Kg)"].sum() / 1000
 # =========================================================
 
 df_prod["Inicial_dt"] = pd.to_datetime(
-    df_prod["Data"].astype(str) + " " + df_prod["Inicial"].astype(str),
+    df_prod["Data"].astype( str) + " " + df_prod["Inicial"].astype(str),
     errors="coerce"
 )
 df_prod["Final_dt"] = pd.to_datetime(
     df_prod["Data"].astype(str) + " " + df_prod["Final"].astype(str),
     errors="coerce"
 )
+df_prod["Ração"] = (df_prod["Ração"])
 df_prod["Horas"] = ((df_prod["Final_dt"] - df_prod["Inicial_dt"]).dt.total_seconds() / 3600)
 df_prod["Quantidade_ton"] = df_prod["Quantidade"] / 1000
 df_prod["Ton_por_Hora"] = df_prod.apply(lambda r: r["Quantidade_ton"] / r["Horas"] if r["Horas"] > 0 else 0, axis=1)
@@ -120,27 +121,41 @@ viagens_dia = (
 )
 
 perdas_detalhadas = []
-for _, row in viagens_dia.iterrows():
-    placa = row["Placa Veículo"]
-    realizadas = row["Realizadas"]
-    dia = row["Dia"]
-    if placa in VEICULOS:
-        possiveis = VEICULOS[placa]["viagens"]
-        capacidade = VEICULOS[placa]["capacidade"]
-        perda_dia = max(possiveis - realizadas, 0) * capacidade
+dias_unicos = df_ent["Dia"].unique()
+
+for dia in dias_unicos:
+    for placa, info in VEICULOS.items():
+        # viagens realizadas nesse dia para essa placa
+        realizadas = viagens_dia[
+            (viagens_dia["Dia"] == dia) & (viagens_dia["Placa Veículo"] == placa)
+        ]["Realizadas"].sum()
+
+        possiveis = info["viagens"]
+        capacidade = info["capacidade"]
+
+        # calcula desvios
+        desvio_viagens = max(possiveis - realizadas, 0)
+        desvio_ton = desvio_viagens * capacidade
+
         perdas_detalhadas.append({
             "Dia": dia,
             "Placa": placa,
-            "Realizadas": realizadas,
-            "Perda_Dia (ton)": perda_dia
+            "Desvio_Viagens": desvio_viagens,
+            "Perda_Dia (ton)": desvio_ton
         })
 
 df_perdas_transporte = pd.DataFrame(perdas_detalhadas)
+
+# resumo por placa
 resumo_transporte = (
     df_perdas_transporte.groupby("Placa")
-    .agg({"Perda_Dia (ton)": "sum", "Realizadas": "sum"})
+    .agg({
+        "Desvio_Viagens": "sum",
+        "Perda_Dia (ton)": "sum"
+    })
     .reset_index()
 )
+
 perda_transporte_total = resumo_transporte["Perda_Dia (ton)"].sum()
 
 # =========================================================
@@ -154,6 +169,20 @@ perc_transporte = (perda_transporte_total / perda_total) * 100 if perda_total > 
 # =========================================================
 # DASHBOARD
 # =========================================================
+# Mostrar período selecionado no topo
+if data_inicio == data_fim:
+    periodo_str = f"{data_inicio.strftime('%d/%m/%Y')}"
+else:
+    periodo_str = f"{data_inicio.strftime('%d/%m/%Y')} até {data_fim.strftime('%d/%m/%Y')}"
+
+# Espaço antes e depois + destaque
+st.markdown("<br>", unsafe_allow_html=True)  # espaço antes
+st.markdown(
+    f"<h4 style='text-align:center; color:darkorange;'>Período selecionado: {periodo_str}</h4>",
+    unsafe_allow_html=True
+)
+st.markdown("<br>", unsafe_allow_html=True)  # espaço depois
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.subheader("Totais Gerais")
 col1, col2, col3 = st.columns(3)
@@ -163,23 +192,49 @@ col3.metric("Entregue (ton)", f"{ent_total:,.2f}")
 
 st.divider()
 col4, col5 = st.columns(2)
-col4.metric("Perda Produção (ton)", f"{perda_producao_total:,.2f}", f"{perc_producao:.1f}%")
-col5.metric("Perda Transporte (ton)", f"{perda_transporte_total:,.2f}", f"{perc_transporte:.1f}%")
+col4.metric(
+    "Perda Produção",
+    f"{perda_producao_total:,.2f} ton",
+    f"{perc_producao:.1f}%",
+    delta_color="inverse"  # vermelho se negativo, verde se positivo
+)
+
+col5.metric(
+    "Perda Transporte",
+    f"{perda_transporte_total:,.2f} ton",
+    f"{perc_transporte:.1f}%",
+    delta_color="inverse"   # verde se positivo
+)
+
 
 st.divider()
 st.subheader("Entregas por Dia")
 ent_daily = df_ent.groupby("Dia")["Total (Kg)"].sum() / 1000
+
+# Converter índice para datetime (se ainda não estiver)
+ent_daily.index = pd.to_datetime(ent_daily.index)
+
+# Formatar para dd/mm
+ent_daily.index = ent_daily.index.strftime("%d/%m")
+
+# Gráfico de linha
 st.line_chart(ent_daily)
+
+
 
 st.divider()
 st.subheader("Produção")
+df_prod_display = df_prod.copy() 
+df_prod_display["Data"] = df_prod_display["Data"].dt.date
 st.dataframe(
-    df_prod[["Data", "Inicial", "Final", "Quantidade_ton", "Horas", "Ton_por_Hora", "Desvio_Producao"]],
+    df_prod_display[["Data", "Inicial", "Final","Ração", "Quantidade_ton", "Horas", "Ton_por_Hora", "Desvio_Producao"]],
     use_container_width=True
 )
 
 st.divider()
 st.subheader("Caminhões")
 st.dataframe(resumo_transporte, use_container_width=True)
-
+df_chart = resumo_transporte.set_index("Placa")[["Perda_Dia (ton)"]] 
+df_chart = df_chart.sort_values(by="Perda_Dia (ton)", ascending=True) 
+st.bar_chart(df_chart)
 
