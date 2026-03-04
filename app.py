@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
-import re
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 
@@ -35,18 +34,26 @@ def limpar_numero_br(valor):
         return float(valor)
 
     valor = str(valor)
-
-    # remove K, kg, espaços
     valor = valor.replace("K", "").replace("kg", "").replace(" ", "")
-
-    # remove milhar
     valor = valor.replace(".", "")
-
-    # troca decimal
     valor = valor.replace(",", ".")
 
     try:
         return float(valor)
+    except:
+        return None
+
+
+# =========================
+# FUNÇÃO FORÇAR INTEIRO
+# =========================
+def forcar_int(valor):
+
+    if pd.isna(valor):
+        return None
+
+    try:
+        return int(float(valor))
     except:
         return None
 
@@ -68,13 +75,10 @@ def limpar_registro(reg):
         elif isinstance(v, datetime.time):
             novo[k] = v.strftime("%H:%M:%S")
 
-        elif isinstance(v, (np.integer,)):
-            novo[k] = int(v)
+        elif k in ["codigo_racao", "idade", "km", "motorista", "fabrica_racoes"]:
+            novo[k] = forcar_int(v)
 
-        elif isinstance(v, (np.floating,)):
-            novo[k] = float(v)
-
-        elif k == "quantidade":
+        elif k in ["quantidade", "total_kg", "quantidade_pedido"]:
             novo[k] = limpar_numero_br(v)
 
         else:
@@ -156,8 +160,6 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
         "Cód.Viagem Tpt.": "cod_viagem",
         "Total (Kg)": "total_kg"
     })
-
-    df_ent["total_kg"] = df_ent["total_kg"].apply(limpar_numero_br)
 
     enviar("entregas", df_ent)
 
