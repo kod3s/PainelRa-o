@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
+import re
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 
@@ -23,6 +24,34 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
 # =========================
+# FUNÇÃO LIMPAR NUMERO BR
+# =========================
+def limpar_numero_br(valor):
+
+    if pd.isna(valor):
+        return None
+
+    if isinstance(valor, (int, float)):
+        return float(valor)
+
+    valor = str(valor)
+
+    # remove K, kg, espaços
+    valor = valor.replace("K", "").replace("kg", "").replace(" ", "")
+
+    # remove milhar
+    valor = valor.replace(".", "")
+
+    # troca decimal
+    valor = valor.replace(",", ".")
+
+    try:
+        return float(valor)
+    except:
+        return None
+
+
+# =========================
 # FUNÇÃO LIMPEZA DEFINITIVA
 # =========================
 def limpar_registro(reg):
@@ -33,31 +62,20 @@ def limpar_registro(reg):
         if pd.isna(v):
             novo[k] = None
 
-        # datas
         elif isinstance(v, (pd.Timestamp, datetime.datetime, datetime.date)):
             novo[k] = v.strftime("%Y-%m-%d")
 
-        # horas
         elif isinstance(v, datetime.time):
             novo[k] = v.strftime("%H:%M:%S")
 
-        # inteiros numpy
         elif isinstance(v, (np.integer,)):
             novo[k] = int(v)
 
-        # floats numpy
         elif isinstance(v, (np.floating,)):
-            if float(v).is_integer():
-                novo[k] = int(v)
-            else:
-                novo[k] = float(v)
+            novo[k] = float(v)
 
-        # float python
-        elif isinstance(v, float):
-            if v.is_integer():
-                novo[k] = int(v)
-            else:
-                novo[k] = float(v)
+        elif k == "quantidade":
+            novo[k] = limpar_numero_br(v)
 
         else:
             novo[k] = v
@@ -139,6 +157,8 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
         "Total (Kg)": "total_kg"
     })
 
+    df_ent["total_kg"] = df_ent["total_kg"].apply(limpar_numero_br)
+
     enviar("entregas", df_ent)
 
 else:
@@ -147,7 +167,7 @@ else:
 
 
 # =========================
-# BUSCAR DADOS
+# DASHBOARD
 # =========================
 df_prog = pd.DataFrame(
     supabase.table("programacao").select("*").execute().data or []
@@ -165,30 +185,10 @@ if df_prog.empty or df_prod.empty or df_ent.empty:
     st.warning("Banco ainda sem dados.")
     st.stop()
 
+prog_total = pd.to_numeric(df_prog["quantidade_pedido"], errors="coerce").sum() / 1000
+prod_total = pd.to_numeric(df_prod["quantidade"], errors="coerce").sum() / 1000
+ent_total = pd.to_numeric(df_ent["total_kg"], errors="coerce").sum() / 1000
 
-# =========================
-# CÁLCULO TOTAIS
-# =========================
-df_prog["quantidade_pedido"] = pd.to_numeric(
-    df_prog["quantidade_pedido"], errors="coerce"
-).fillna(0)
-
-df_prod["quantidade"] = pd.to_numeric(
-    df_prod["quantidade"], errors="coerce"
-).fillna(0)
-
-df_ent["total_kg"] = pd.to_numeric(
-    df_ent["total_kg"], errors="coerce"
-).fillna(0)
-
-prog_total = df_prog["quantidade_pedido"].sum() / 1000
-prod_total = df_prod["quantidade"].sum() / 1000
-ent_total = df_ent["total_kg"].sum() / 1000
-
-
-# =========================
-# DASHBOARD
-# =========================
 st.subheader("Totais Gerais")
 
 col1, col2, col3 = st.columns(3)
