@@ -237,3 +237,4 @@ ent_daily["dia_fmt"] = ent_daily["dia"].dt.strftime("%d/%m")
 
 st.line_chart(ent_daily.set_index("dia_fmt")["total_kg"] / 1000)
 
+
