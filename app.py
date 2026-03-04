@@ -31,6 +31,12 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
     df_prod.columns = df_prod.columns.str.strip()
     df_ent.columns = df_ent.columns.str.strip()
 
+    # Converter datas para string (ISO)
+    for df in [df_prog, df_prod, df_ent]:
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].astype(str)
+                
     # Persistir no Supabase com upsert
     supabase.table("programacao").upsert(
         df_prog.to_dict(orient="records"),
@@ -277,6 +283,7 @@ st.dataframe(resumo_transporte, use_container_width=True)
 df_chart = resumo_transporte.set_index("Placa")[["Perda_Dia (ton)"]] 
 df_chart = df_chart.sort_values(by="Perda_Dia (ton)", ascending=True) 
 st.bar_chart(df_chart)
+
 
 
 
