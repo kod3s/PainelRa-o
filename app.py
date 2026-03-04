@@ -17,84 +17,27 @@ arquivo_prod = st.sidebar.file_uploader("Producao.xlsx", type=["xlsx"])
 arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
-def preparar_df(df):
-    df.columns = df.columns.str.strip()
+try:
+    response = supabase.table("programacao").upsert(
+        df_prog.to_dict(orient="records"),
+        on_conflict="data_pedido"
+    ).execute()
 
-    # Converter QUALQUER datetime ou timestamp para string ISO
-    for col in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = df[col].dt.strftime("%Y-%m-%d")
+    st.success("Upload programacao OK")
 
-    # Converter objetos date isolados para string
-    df = df.applymap(
-        lambda x: x.strftime("%Y-%m-%d")
-        if hasattr(x, "strftime")
-        else x
-    )
-
-    # Trocar NaN por None
-    df = df.where(pd.notnull(df), None)
-
-    return df
-
-
-if arquivo_prog and arquivo_prod and arquivo_ent:
-
-    # =========================
-    # PROGRAMACAO
-    # =========================
-    df_prog = preparar_df(pd.read_excel(arquivo_prog))
-
-    df_prog = df_prog.rename(columns={
-        "Data Pedido": "data_pedido",
-        "Quantidade Pedido": "quantidade_pedido"
-    })
-
-    if not df_prog.empty:
-        supabase.table("programacao").upsert(
-            df_prog.to_dict(orient="records"),
-            on_conflict="data_pedido"
-        ).execute()
-
-    # =========================
-    # PRODUCAO
-    # =========================
-    df_prod = preparar_df(pd.read_excel(arquivo_prod))
-
-    df_prod = df_prod.rename(columns={
-        "Data": "data",
-        "Inicial": "inicial",
-        "Final": "final",
-        "Quantidade": "quantidade"
-    })
-
-    if not df_prod.empty:
-        supabase.table("producao").upsert(
-            df_prod.to_dict(orient="records"),
-            on_conflict="data,inicial,final"
-        ).execute()
-
-    # =========================
-    # ENTREGAS
-    # =========================
-    df_ent = preparar_df(pd.read_excel(arquivo_ent))
-
-    df_ent = df_ent.rename(columns={
-        "Data Transação": "data_transacao",
-        "Placa Veículo": "placa_veiculo",
-        "Cód.Viagem Tpt.": "cod_viagem",
-        "Total (Kg)": "total_kg"
-    })
-
+except Exception as e:
+    st.error("ERRO REAL:")
+    st.write(e)
+    st.stop()
     if not df_ent.empty:
         supabase.table("entregas").upsert(
             df_ent.to_dict(orient="records"),
             on_conflict="data_transacao,placa_veiculo,cod_viagem"
         ).execute()
 
-else:
-    st.warning("Envie as 3 planilhas para continuar.")
-    st.stop()
+    else:
+        st.warning("Envie as 3 planilhas para continuar.")
+        st.stop()
 
 
 # =========================
@@ -187,4 +130,5 @@ ent_daily = ent_daily.sort_values("dia")
 ent_daily["dia_fmt"] = ent_daily["dia"].dt.strftime("%d/%m")
 
 st.line_chart(ent_daily.set_index("dia_fmt")["total_kg"] / 1000)
+
 
