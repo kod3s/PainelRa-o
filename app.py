@@ -23,7 +23,7 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
 # =========================
-# CONVERSÃO SEGURA FINAL
+# FUNÇÃO LIMPEZA JSON
 # =========================
 def limpar_registro(reg):
     novo = {}
@@ -49,6 +49,7 @@ def limpar_registro(reg):
 
 
 def enviar(nome_tabela, df):
+
     if df.empty:
         st.warning(f"{nome_tabela} vazio.")
         return
@@ -66,39 +67,35 @@ def enviar(nome_tabela, df):
 
 
 # =========================
-# UPLOAD
+# UPLOAD E ENVIO
 # =========================
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
-    # PROGRAMACAO
-df_prog = pd.read_excel(arquivo_prog)
-df_prog.columns = df_prog.columns.str.strip()
+    # ================= PROGRAMACAO =================
+    df_prog = pd.read_excel(arquivo_prog)
+    df_prog.columns = df_prog.columns.str.strip()
 
-df_prog = df_prog.rename(columns={
-    "Tipo Fazenda": "tipo_fazenda",
-    "Data Pedido": "data_pedido",
-    "Data Carga": "data_carga",
-    "Idade": "idade",
-    "Código Ração": "codigo_racao",
-    "Nome Fazenda": "nome_fazenda",
-    "Quantidade Pedido": "quantidade_pedido",
-    "Observações": "observacoes",
-    "Nome Ração": "nome_racao",
-    "KM": "km",
-    "Motorista": "motorista",
-    "Município": "municipio",
-    "Localidade": "localidade",
-    "Fábrica Rações": "fabrica_racoes",
-    "Nome Motorista": "nome_motorista"
-})
+    df_prog = df_prog.rename(columns={
+        "Tipo Fazenda": "tipo_fazenda",
+        "Data Pedido": "data_pedido",
+        "Data Carga": "data_carga",
+        "Idade": "idade",
+        "Código Ração": "codigo_racao",
+        "Nome Fazenda": "nome_fazenda",
+        "Quantidade Pedido": "quantidade_pedido",
+        "Observações": "observacoes",
+        "Nome Ração": "nome_racao",
+        "KM": "km",
+        "Motorista": "motorista",
+        "Município": "municipio",
+        "Localidade": "localidade",
+        "Fábrica Rações": "fabrica_racoes",
+        "Nome Motorista": "nome_motorista"
+    })
 
-# ⚠️ DEBUG IMPORTANTE
-st.write("Colunas após rename:")
-st.write(df_prog.columns.tolist())
+    enviar("programacao", df_prog)
 
-enviar("programacao", df_prog)
-
-    # PRODUCAO
+    # ================= PRODUCAO =================
     df_prod = pd.read_excel(arquivo_prod)
     df_prod.columns = df_prod.columns.str.strip()
 
@@ -109,11 +106,9 @@ enviar("programacao", df_prog)
         "Quantidade": "quantidade"
     })
 
-    df_prod = df_prod.dropna(subset=["data"])
-
     enviar("producao", df_prod)
 
-    # ENTREGAS
+    # ================= ENTREGAS =================
     df_ent = pd.read_excel(arquivo_ent)
     df_ent.columns = df_ent.columns.str.strip()
 
@@ -124,8 +119,6 @@ enviar("programacao", df_prog)
         "Total (Kg)": "total_kg"
     })
 
-    df_ent = df_ent.dropna(subset=["data_transacao"])
-
     enviar("entregas", df_ent)
 
 else:
@@ -134,31 +127,50 @@ else:
 
 
 # =========================
-# BUSCAR DADOS
+# BUSCAR DADOS DO BANCO
 # =========================
-df_prog = pd.DataFrame(supabase.table("programacao").select("*").execute().data or [])
-df_prod = pd.DataFrame(supabase.table("producao").select("*").execute().data or [])
-df_ent = pd.DataFrame(supabase.table("entregas").select("*").execute().data or [])
+df_prog = pd.DataFrame(
+    supabase.table("programacao").select("*").execute().data or []
+)
+df_prod = pd.DataFrame(
+    supabase.table("producao").select("*").execute().data or []
+)
+df_ent = pd.DataFrame(
+    supabase.table("entregas").select("*").execute().data or []
+)
 
 if df_prog.empty or df_prod.empty or df_ent.empty:
     st.warning("Banco ainda sem dados.")
     st.stop()
 
+
 # =========================
-# TOTAIS
+# CÁLCULO TOTAIS
 # =========================
-df_prog["quantidade_pedido"] = pd.to_numeric(df_prog["quantidade_pedido"], errors="coerce").fillna(0)
-df_prod["quantidade"] = pd.to_numeric(df_prod["quantidade"], errors="coerce").fillna(0)
-df_ent["total_kg"] = pd.to_numeric(df_ent["total_kg"], errors="coerce").fillna(0)
+df_prog["quantidade_pedido"] = pd.to_numeric(
+    df_prog["quantidade_pedido"], errors="coerce"
+).fillna(0)
+
+df_prod["quantidade"] = pd.to_numeric(
+    df_prod["quantidade"], errors="coerce"
+).fillna(0)
+
+df_ent["total_kg"] = pd.to_numeric(
+    df_ent["total_kg"], errors="coerce"
+).fillna(0)
 
 prog_total = df_prog["quantidade_pedido"].sum() / 1000
 prod_total = df_prod["quantidade"].sum() / 1000
 ent_total = df_ent["total_kg"].sum() / 1000
 
+
+# =========================
+# DASHBOARD
+# =========================
 st.subheader("Totais Gerais")
 
 col1, col2, col3 = st.columns(3)
+
 col1.metric("Programado (ton)", f"{prog_total:,.2f}")
 col2.metric("Produzido (ton)", f"{prod_total:,.2f}")
 col3.metric("Entregue (ton)", f"{ent_total:,.2f}")
-
