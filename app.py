@@ -1,4 +1,4 @@
-from supabase import create_client
+from supabase.client import create_client
 import streamlit as st
 import pandas as pd
 
@@ -276,4 +276,5 @@ st.dataframe(resumo_transporte, use_container_width=True)
 df_chart = resumo_transporte.set_index("Placa")[["Perda_Dia (ton)"]] 
 df_chart = df_chart.sort_values(by="Perda_Dia (ton)", ascending=True) 
 st.bar_chart(df_chart)
+
 
