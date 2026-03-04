@@ -23,7 +23,7 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
 # =========================
-# LIMPEZA FINAL JSON
+# FUNÇÃO LIMPEZA DEFINITIVA
 # =========================
 def limpar_registro(reg):
     novo = {}
@@ -33,15 +33,28 @@ def limpar_registro(reg):
         if pd.isna(v):
             novo[k] = None
 
+        # datas
         elif isinstance(v, (pd.Timestamp, datetime.datetime, datetime.date)):
             novo[k] = v.strftime("%Y-%m-%d")
 
-        elif isinstance(v, (np.integer, int)):
+        # horas
+        elif isinstance(v, datetime.time):
+            novo[k] = v.strftime("%H:%M:%S")
+
+        # inteiros numpy
+        elif isinstance(v, (np.integer,)):
             novo[k] = int(v)
 
-        elif isinstance(v, (np.floating, float)):
-            # Se for número inteiro disfarçado de float, converte
+        # floats numpy
+        elif isinstance(v, (np.floating,)):
             if float(v).is_integer():
+                novo[k] = int(v)
+            else:
+                novo[k] = float(v)
+
+        # float python
+        elif isinstance(v, float):
+            if v.is_integer():
                 novo[k] = int(v)
             else:
                 novo[k] = float(v)
@@ -71,7 +84,7 @@ def enviar(nome_tabela, df):
 
 
 # =========================
-# UPLOAD
+# PROCESSAMENTO
 # =========================
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
@@ -97,13 +110,6 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
         "Nome Motorista": "nome_motorista"
     })
 
-    # 🔥 FORÇA TIPOS CORRETOS
-    colunas_int = ["idade", "codigo_racao", "motorista", "fabrica_racoes"]
-
-    for col in colunas_int:
-        if col in df_prog.columns:
-            df_prog[col] = pd.to_numeric(df_prog[col], errors="coerce").astype("Int64")
-
     enviar("programacao", df_prog)
 
     # ================= PRODUCAO =================
@@ -114,7 +120,10 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
         "Data": "data",
         "Inicial": "inicial",
         "Final": "final",
-        "Quantidade": "quantidade"
+        "Quantidade": "quantidade",
+        "Quant. Batidas": "quant_batidas",
+        "Lote": "lote",
+        "Ração": "racao"
     })
 
     enviar("producao", df_prod)
@@ -138,14 +147,16 @@ else:
 
 
 # =========================
-# DASHBOARD
+# BUSCAR DADOS
 # =========================
 df_prog = pd.DataFrame(
     supabase.table("programacao").select("*").execute().data or []
 )
+
 df_prod = pd.DataFrame(
     supabase.table("producao").select("*").execute().data or []
 )
+
 df_ent = pd.DataFrame(
     supabase.table("entregas").select("*").execute().data or []
 )
@@ -154,6 +165,10 @@ if df_prog.empty or df_prod.empty or df_ent.empty:
     st.warning("Banco ainda sem dados.")
     st.stop()
 
+
+# =========================
+# CÁLCULO TOTAIS
+# =========================
 df_prog["quantidade_pedido"] = pd.to_numeric(
     df_prog["quantidade_pedido"], errors="coerce"
 ).fillna(0)
@@ -170,9 +185,14 @@ prog_total = df_prog["quantidade_pedido"].sum() / 1000
 prod_total = df_prod["quantidade"].sum() / 1000
 ent_total = df_ent["total_kg"].sum() / 1000
 
+
+# =========================
+# DASHBOARD
+# =========================
 st.subheader("Totais Gerais")
 
 col1, col2, col3 = st.columns(3)
+
 col1.metric("Programado (ton)", f"{prog_total:,.2f}")
 col2.metric("Produzido (ton)", f"{prod_total:,.2f}")
 col3.metric("Entregue (ton)", f"{ent_total:,.2f}")
