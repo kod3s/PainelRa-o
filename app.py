@@ -2,6 +2,7 @@ from supabase import create_client
 import streamlit as st
 import pandas as pd
 import numpy as np
+import datetime
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 
@@ -22,32 +23,45 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
 # =========================
-# FUNÇÃO SEGURA
+# CONVERSÃO SEGURA FINAL
 # =========================
-def preparar_df(df):
-    df.columns = df.columns.str.strip()
-    df = df.replace({np.nan: None})
+def limpar_registro(reg):
+    novo = {}
 
-    for col in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = df[col].dt.strftime("%Y-%m-%d")
+    for k, v in reg.items():
 
-    return df
+        if pd.isna(v):
+            novo[k] = None
+
+        elif isinstance(v, (pd.Timestamp, datetime.datetime, datetime.date)):
+            novo[k] = v.strftime("%Y-%m-%d")
+
+        elif isinstance(v, (np.integer,)):
+            novo[k] = int(v)
+
+        elif isinstance(v, (np.floating,)):
+            novo[k] = float(v)
+
+        else:
+            novo[k] = v
+
+    return novo
 
 
-def inserir_sem_upsert(nome_tabela, df):
+def enviar(nome_tabela, df):
     if df.empty:
         st.warning(f"{nome_tabela} vazio.")
         return
 
     registros = df.to_dict(orient="records")
+    registros_limpos = [limpar_registro(r) for r in registros]
 
     try:
-        supabase.table(nome_tabela).insert(registros).execute()
+        supabase.table(nome_tabela).insert(registros_limpos).execute()
         st.success(f"{nome_tabela} inserido com sucesso.")
     except Exception as e:
         st.error(f"Erro ao inserir {nome_tabela}: {e}")
-        st.json(registros[0])
+        st.json(registros_limpos[0])
         st.stop()
 
 
@@ -57,7 +71,8 @@ def inserir_sem_upsert(nome_tabela, df):
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
     # PROGRAMACAO
-    df_prog = preparar_df(pd.read_excel(arquivo_prog))
+    df_prog = pd.read_excel(arquivo_prog)
+    df_prog.columns = df_prog.columns.str.strip()
 
     df_prog = df_prog.rename(columns={
         "Data Pedido": "data_pedido",
@@ -66,10 +81,11 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
 
     df_prog = df_prog.dropna(subset=["data_pedido"])
 
-    inserir_sem_upsert("programacao", df_prog)
+    enviar("programacao", df_prog)
 
     # PRODUCAO
-    df_prod = preparar_df(pd.read_excel(arquivo_prod))
+    df_prod = pd.read_excel(arquivo_prod)
+    df_prod.columns = df_prod.columns.str.strip()
 
     df_prod = df_prod.rename(columns={
         "Data": "data",
@@ -80,10 +96,11 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
 
     df_prod = df_prod.dropna(subset=["data"])
 
-    inserir_sem_upsert("producao", df_prod)
+    enviar("producao", df_prod)
 
     # ENTREGAS
-    df_ent = preparar_df(pd.read_excel(arquivo_ent))
+    df_ent = pd.read_excel(arquivo_ent)
+    df_ent.columns = df_ent.columns.str.strip()
 
     df_ent = df_ent.rename(columns={
         "Data Transação": "data_transacao",
@@ -94,7 +111,7 @@ if arquivo_prog and arquivo_prod and arquivo_ent:
 
     df_ent = df_ent.dropna(subset=["data_transacao"])
 
-    inserir_sem_upsert("entregas", df_ent)
+    enviar("entregas", df_ent)
 
 else:
     st.warning("Envie as 3 planilhas.")
@@ -112,9 +129,8 @@ if df_prog.empty or df_prod.empty or df_ent.empty:
     st.warning("Banco ainda sem dados.")
     st.stop()
 
-
 # =========================
-# CONVERSÕES
+# TOTAIS
 # =========================
 df_prog["quantidade_pedido"] = pd.to_numeric(df_prog["quantidade_pedido"], errors="coerce").fillna(0)
 df_prod["quantidade"] = pd.to_numeric(df_prod["quantidade"], errors="coerce").fillna(0)
