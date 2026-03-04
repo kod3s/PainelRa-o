@@ -45,22 +45,33 @@ def preparar_df(df):
 # =========================
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
-    # PROGRAMACAO
-    df_prog = preparar_df(pd.read_excel(arquivo_prog))
+    # =========================
+# PROGRAMACAO
+# =========================
+df_prog = preparar_df(pd.read_excel(arquivo_prog))
 
-    df_prog = df_prog.rename(columns={
-        "Data Pedido": "data_pedido",
-        "Quantidade Pedido": "quantidade_pedido"
-    })
+df_prog = df_prog.rename(columns={
+    "Data Pedido": "data_pedido",
+    "Quantidade Pedido": "quantidade_pedido"
+})
 
-    if not df_prog.empty:
+# 🔥 Remover linhas totalmente vazias
+df_prog = df_prog.dropna(subset=["data_pedido"])
+
+if not df_prog.empty:
+
+    records = df_prog.to_dict(orient="records")
+
+    # 🔥 Garantir que não envia lista vazia
+    if len(records) > 0:
         try:
             supabase.table("programacao").upsert(
-                df_prog.to_dict(orient="records"),
+                records,
                 on_conflict="data_pedido"
             ).execute()
         except Exception as e:
             st.error(f"Erro programacao: {e}")
+            st.write(records)  # Mostra o que está sendo enviado
             st.stop()
 
     # PRODUCAO
@@ -225,3 +236,4 @@ ent_daily = ent_daily.sort_values("dia")
 ent_daily["dia_fmt"] = ent_daily["dia"].dt.strftime("%d/%m")
 
 st.line_chart(ent_daily.set_index("dia_fmt")["total_kg"] / 1000)
+
