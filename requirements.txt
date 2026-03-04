@@ -1,5 +1,3 @@
 streamlit
 pandas
-openpyxl
-sqlalchemy
-psycopg2-binary
+supabase-py
