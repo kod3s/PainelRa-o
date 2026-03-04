@@ -4,11 +4,14 @@ import pandas as pd
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 
+# =========================
+# CONEXÃO SUPABASE
+# =========================
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["service_key"]
 supabase = create_client(url, key)
 
-st.title("Painel de desvios - Ração Sidrolândia")
+st.title("Painel de Desvios - Ração Sidrolândia")
 
 st.sidebar.header("Upload das Planilhas")
 
@@ -23,12 +26,12 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 def preparar_df(df):
     df.columns = df.columns.str.strip()
 
-    # Converter qualquer datetime para string ISO
+    # Converter datetime para string ISO
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = df[col].dt.strftime("%Y-%m-%d")
 
-    # Converter objetos date isolados
+    # Converter qualquer objeto date
     df = df.applymap(
         lambda x: x.strftime("%Y-%m-%d")
         if hasattr(x, "strftime")
@@ -45,33 +48,24 @@ def preparar_df(df):
 # =========================
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
-    # =========================
-# PROGRAMACAO
-# =========================
-df_prog = preparar_df(pd.read_excel(arquivo_prog))
+    # PROGRAMACAO
+    df_prog = preparar_df(pd.read_excel(arquivo_prog))
 
-df_prog = df_prog.rename(columns={
-    "Data Pedido": "data_pedido",
-    "Quantidade Pedido": "quantidade_pedido"
-})
+    df_prog = df_prog.rename(columns={
+        "Data Pedido": "data_pedido",
+        "Quantidade Pedido": "quantidade_pedido"
+    })
 
-# 🔥 Remover linhas totalmente vazias
-df_prog = df_prog.dropna(subset=["data_pedido"])
+    df_prog = df_prog.dropna(subset=["data_pedido"])
 
-if not df_prog.empty:
-
-    records = df_prog.to_dict(orient="records")
-
-    # 🔥 Garantir que não envia lista vazia
-    if len(records) > 0:
+    if not df_prog.empty:
         try:
             supabase.table("programacao").upsert(
-                records,
+                df_prog.to_dict(orient="records"),
                 on_conflict="data_pedido"
             ).execute()
         except Exception as e:
             st.error(f"Erro programacao: {e}")
-            st.write(records)  # Mostra o que está sendo enviado
             st.stop()
 
     # PRODUCAO
@@ -83,6 +77,8 @@ if not df_prog.empty:
         "Final": "final",
         "Quantidade": "quantidade"
     })
+
+    df_prod = df_prod.dropna(subset=["data"])
 
     if not df_prod.empty:
         try:
@@ -103,6 +99,8 @@ if not df_prog.empty:
         "Cód.Viagem Tpt.": "cod_viagem",
         "Total (Kg)": "total_kg"
     })
+
+    df_ent = df_ent.dropna(subset=["data_transacao"])
 
     if not df_ent.empty:
         try:
@@ -140,7 +138,7 @@ df_ent["data_transacao"] = pd.to_datetime(df_ent["data_transacao"], errors="coer
 
 
 # =========================
-# FILTRO
+# FILTRO DE PERÍODO
 # =========================
 st.subheader("Filtro de Período")
 
@@ -236,5 +234,3 @@ ent_daily = ent_daily.sort_values("dia")
 ent_daily["dia_fmt"] = ent_daily["dia"].dt.strftime("%d/%m")
 
 st.line_chart(ent_daily.set_index("dia_fmt")["total_kg"] / 1000)
-
-
