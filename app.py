@@ -20,11 +20,21 @@ arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 def preparar_df(df):
     df.columns = df.columns.str.strip()
 
+    # Converter QUALQUER datetime ou timestamp para string ISO
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = pd.to_datetime(df[col]).dt.date
+            df[col] = df[col].dt.strftime("%Y-%m-%d")
 
+    # Converter objetos date isolados para string
+    df = df.applymap(
+        lambda x: x.strftime("%Y-%m-%d")
+        if hasattr(x, "strftime")
+        else x
+    )
+
+    # Trocar NaN por None
     df = df.where(pd.notnull(df), None)
+
     return df
 
 
@@ -177,3 +187,4 @@ ent_daily = ent_daily.sort_values("dia")
 ent_daily["dia_fmt"] = ent_daily["dia"].dt.strftime("%d/%m")
 
 st.line_chart(ent_daily.set_index("dia_fmt")["total_kg"] / 1000)
+
