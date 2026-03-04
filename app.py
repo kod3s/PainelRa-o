@@ -1,5 +1,11 @@
+from supabase import create_client
 import streamlit as st
 import pandas as pd
+
+url = st.secrets["supabase"]["url"]
+key = st.secrets["supabase"]["service_key"]
+supabase = create_client(url, key)
+
 
 st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 st.title("Painel de desvios - Ração Sidrolândia")
@@ -14,18 +20,42 @@ arquivo_prog = st.sidebar.file_uploader("Programacao.xlsx", type=["xlsx"])
 arquivo_prod = st.sidebar.file_uploader("Producao.xlsx", type=["xlsx"])
 arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
-if not arquivo_prog or not arquivo_prod or not arquivo_ent:
+if arquivo_prog and arquivo_prod and arquivo_ent:
+    df_prog = pd.read_excel(arquivo_prog)
+    df_prod = pd.read_excel(arquivo_prod)
+    df_ent = pd.read_excel(arquivo_ent)
+
+    # Limpar espaços extras dos nomes das colunas
+    df_prog.columns = df_prog.columns.str.strip()
+    df_prod.columns = df_prod.columns.str.strip()
+    df_ent.columns = df_ent.columns.str.strip()
+
+    # Persistir no Supabase com upsert
+    supabase.table("programacao").upsert(
+        df_prog.to_dict(orient="records"),
+        on_conflict=["Data Pedido", "Cliente"]  # ajuste conforme suas colunas únicas
+    ).execute()
+
+    supabase.table("producao").upsert(
+        df_prod.to_dict(orient="records"),
+        on_conflict=["Data", "Ração"]  # ajuste conforme suas colunas únicas
+    ).execute()
+
+    supabase.table("entregas").upsert(
+        df_ent.to_dict(orient="records"),
+        on_conflict=["Data Transação", "Placa Veículo", "Cód.Viagem Tpt."]  # ajuste conforme suas colunas únicas
+    ).execute()
+else:
     st.warning("Envie as 3 planilhas para continuar.")
     st.stop()
+res_prog = supabase.table("programacao").select("*").execute()
+df_prog = pd.DataFrame(res_prog.data)
 
-df_prog = pd.read_excel(arquivo_prog)
-df_prod = pd.read_excel(arquivo_prod)
-df_ent = pd.read_excel(arquivo_ent)
+res_prod = supabase.table("producao").select("*").execute()
+df_prod = pd.DataFrame(res_prod.data)
 
-# Limpar espaços extras dos nomes das colunas
-df_prog.columns = df_prog.columns.str.strip()
-df_prod.columns = df_prod.columns.str.strip()
-df_ent.columns = df_ent.columns.str.strip()
+res_ent = supabase.table("entregas").select("*").execute()
+df_ent = pd.DataFrame(res_ent.data)
 
 # =========================================================
 # DATAS
@@ -67,11 +97,11 @@ df_ent = df_ent[
 
 df_prog["Quantidade Pedido"] = pd.to_numeric(df_prog["Quantidade Pedido"], errors="coerce").fillna(0)
 df_prod["Quantidade"] = pd.to_numeric(df_prod["Quantidade"], errors="coerce").fillna(0)
-df_ent["Total (Kg)"] = pd.to_numeric(df_ent["Total (Kg)"], errors="coerce").fillna(0)
+df_ent["Total (Ton)"] = pd.to_numeric(df_ent["Total (Kg)"], errors="coerce").fillna(0)
 
 prog_total = df_prog["Quantidade Pedido"].sum() / 1000
 prod_total = df_prod["Quantidade"].sum() / 1000
-ent_total = df_ent["Total (Kg)"].sum() / 1000
+ent_total = df_ent["Total (Ton)"].sum() / 1000
 
 # =========================================================
 # PRODUÇÃO
@@ -99,7 +129,7 @@ perda_producao_total = df_prod["Desvio_Producao"].sum()
 VEICULOS = {
     "RYD8F51": {"viagens": 5, "capacidade": 16.5},
     "CZB8A96": {"viagens": 4, "capacidade": 30},
-    "RWJ8J74": {"viagens": 4, "capacidade": 30},
+    "RWJ8J74": {"viagens": 4, "capacidade": 26},
     "RYD8I11": {"viagens": 5, "capacidade": 16.5},
     "SMF2D38": {"viagens": 5, "capacidade": 16.5},
     "RYL1D34": {"viagens": 5, "capacidade": 16.5},
@@ -209,16 +239,25 @@ col5.metric(
 
 st.divider()
 st.subheader("Entregas por Dia")
-ent_daily = df_ent.groupby("Dia")["Total (Kg)"].sum() / 1000
 
-# Converter índice para datetime (se ainda não estiver)
-ent_daily.index = pd.to_datetime(ent_daily.index)
+# Agrupar por dia e somar
+ent_daily = df_ent.groupby("Dia")["Total (Ton)"].sum().reset_index()
 
-# Formatar para dd/mm
-ent_daily.index = ent_daily.index.strftime("%d/%m")
+# Converter coluna para datetime
+ent_daily["Dia"] = pd.to_datetime(ent_daily["Dia"])
 
-# Gráfico de linha
-st.line_chart(ent_daily)
+# Ordenar cronologicamente
+ent_daily = ent_daily.sort_values("Dia")
+
+# Criar coluna formatada para exibição
+ent_daily["Dia_fmt"] = ent_daily["Dia"].dt.strftime("%d/%m")
+
+# Gráfico usando coluna formatada como eixo X
+st.line_chart(ent_daily.set_index("Dia_fmt")["Total (Ton)"] / 1000)
+
+
+
+
 
 
 
