@@ -1,18 +1,14 @@
-from supabase.client import create_client
+from supabase import create_client
 import streamlit as st
 import pandas as pd
+
+st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["service_key"]
 supabase = create_client(url, key)
 
-
-st.set_page_config(page_title="Indicadores Ração SDR", layout="wide")
 st.title("Painel de desvios - Ração Sidrolândia")
-
-# =========================================================
-# UPLOAD DAS 3 PLANILHAS
-# =========================================================
 
 st.sidebar.header("Upload das Planilhas")
 
@@ -21,22 +17,50 @@ arquivo_prod = st.sidebar.file_uploader("Producao.xlsx", type=["xlsx"])
 arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
 
 
+def preparar_df(df):
+    # limpa nomes
+    df.columns = df.columns.str.strip()
+
+    # converte datas para string
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].astype(str)
+
+    # remove NaN (evita erro JSON)
+    df = df.where(pd.notnull(df), None)
+
+    return df
+
+
 if arquivo_prog and arquivo_prod and arquivo_ent:
-    df_prog = pd.read_excel(arquivo_prog)
-    df_prod = pd.read_excel(arquivo_prod)
-    df_ent = pd.read_excel(arquivo_ent)
 
-    # Limpar espaços extras dos nomes das colunas
-    df_prog.columns = df_prog.columns.str.strip()
-    df_prod.columns = df_prod.columns.str.strip()
-    df_ent.columns = df_ent.columns.str.strip()
+    df_prog = preparar_df(pd.read_excel(arquivo_prog))
+    df_prod = preparar_df(pd.read_excel(arquivo_prod))
+    df_ent = preparar_df(pd.read_excel(arquivo_ent))
 
-    # Converter datas para string (ISO)
-    for df in [df_prog, df_prod, df_ent]:
-        for col in df.columns:
-            if pd.api.types.is_datetime64_any_dtype(df[col]):
-                df[col] = df[col].astype(str)
-                
+    # 🔥 SÓ ENVIA SE TIVER DADOS
+    if not df_prog.empty:
+        supabase.table("programacao").upsert(
+            df_prog.to_dict(orient="records"),
+            on_conflict="Data Pedido,Cliente"
+        ).execute()
+
+    if not df_prod.empty:
+        supabase.table("producao").upsert(
+            df_prod.to_dict(orient="records"),
+            on_conflict="Data,Ração"
+        ).execute()
+
+    if not df_ent.empty:
+        supabase.table("entregas").upsert(
+            df_ent.to_dict(orient="records"),
+            on_conflict="Data Transação,Placa Veículo,Cód.Viagem Tpt."
+        ).execute()
+    
+    else:
+        st.warning("Envie as 3 planilhas para continuar.")
+        st.stop()
+        
     # Persistir no Supabase com upsert
     supabase.table("programacao").upsert(
         df_prog.to_dict(orient="records"),
@@ -283,6 +307,7 @@ st.dataframe(resumo_transporte, use_container_width=True)
 df_chart = resumo_transporte.set_index("Placa")[["Perda_Dia (ton)"]] 
 df_chart = df_chart.sort_values(by="Perda_Dia (ton)", ascending=True) 
 st.bar_chart(df_chart)
+
 
 
 
