@@ -19,6 +19,8 @@ st.sidebar.header("Upload das Planilhas")
 arquivo_prog = st.sidebar.file_uploader("Programacao.xlsx", type=["xlsx"])
 arquivo_prod = st.sidebar.file_uploader("Producao.xlsx", type=["xlsx"])
 arquivo_ent = st.sidebar.file_uploader("Entregas.xlsx", type=["xlsx"])
+res = supabase.table("entregas").select("*").limit(1).execute()
+st.write(res.data)
 
 if arquivo_prog and arquivo_prod and arquivo_ent:
     df_prog = pd.read_excel(arquivo_prog)
@@ -276,5 +278,6 @@ st.dataframe(resumo_transporte, use_container_width=True)
 df_chart = resumo_transporte.set_index("Placa")[["Perda_Dia (ton)"]] 
 df_chart = df_chart.sort_values(by="Perda_Dia (ton)", ascending=True) 
 st.bar_chart(df_chart)
+
 
 
