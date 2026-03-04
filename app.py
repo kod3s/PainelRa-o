@@ -71,17 +71,32 @@ def enviar(nome_tabela, df):
 if arquivo_prog and arquivo_prod and arquivo_ent:
 
     # PROGRAMACAO
-    df_prog = pd.read_excel(arquivo_prog)
-    df_prog.columns = df_prog.columns.str.strip()
+df_prog = pd.read_excel(arquivo_prog)
+df_prog.columns = df_prog.columns.str.strip()
 
-    df_prog = df_prog.rename(columns={
-        "Data Pedido": "data_pedido",
-        "Quantidade Pedido": "quantidade_pedido"
-    })
+df_prog = df_prog.rename(columns={
+    "Tipo Fazenda": "tipo_fazenda",
+    "Data Pedido": "data_pedido",
+    "Data Carga": "data_carga",
+    "Idade": "idade",
+    "Código Ração": "codigo_racao",
+    "Nome Fazenda": "nome_fazenda",
+    "Quantidade Pedido": "quantidade_pedido",
+    "Observações": "observacoes",
+    "Nome Ração": "nome_racao",
+    "KM": "km",
+    "Motorista": "motorista",
+    "Município": "municipio",
+    "Localidade": "localidade",
+    "Fábrica Rações": "fabrica_racoes",
+    "Nome Motorista": "nome_motorista"
+})
 
-    df_prog = df_prog.dropna(subset=["data_pedido"])
+# ⚠️ DEBUG IMPORTANTE
+st.write("Colunas após rename:")
+st.write(df_prog.columns.tolist())
 
-    enviar("programacao", df_prog)
+enviar("programacao", df_prog)
 
     # PRODUCAO
     df_prod = pd.read_excel(arquivo_prod)
@@ -146,3 +161,4 @@ col1, col2, col3 = st.columns(3)
 col1.metric("Programado (ton)", f"{prog_total:,.2f}")
 col2.metric("Produzido (ton)", f"{prod_total:,.2f}")
 col3.metric("Entregue (ton)", f"{ent_total:,.2f}")
+
